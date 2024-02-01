@@ -63,7 +63,7 @@ def lose(player):
     r = getRank(s)
 
     cur.execute("UPDATE PLAYERS SET score = ?, lastplayed = ? WHERE playtak = ?",
-                (s - r[2], int(datetime.datetime.utcnow().timestamp()), player))
+                (max(s - r[2], 0), int(datetime.datetime.utcnow().timestamp()), player))
     con.commit()
 
 def draw(player):
