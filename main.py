@@ -221,5 +221,16 @@ async def standings(ctx):
 
     await ctx.respond(out)
 
+@bot.slash_command(guild_ids=KNOWN_GUILDS)
+async def recent(ctx, n=5):
+    """Get recently played games"""
+    await ctx.defer()
+    r = cur.execute("SELECT * FROM GAMES ORDER BY date DESC LIMIT ?", (n,)).fetchall()
+    out = "# Recent games:\n"
+    for i in r:
+        out += f" - {i[2]} vs. {i[3]} ({i[4]})"
+        out += f"[ptn.ninja](https://playtak.com/games/{i[0]}/ninjaviewer)\n" if i[0] != 0 else "\n"
+    await ctx.respond(out)
+
 loadConfig()
 asyncio.run(bot.start(token))
