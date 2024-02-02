@@ -210,15 +210,21 @@ async def deregister(ctx):
     await ctx.respond("Successfully deregistered you!")
 
 @bot.slash_command(guild_ids=KNOWN_GUILDS)
-async def rank(ctx):
-    """Get your rank"""
-    u = cur.execute("SELECT score, lastplayed FROM PLAYERS WHERE discordID = ?", (ctx.author.id,)).fetchone()
-    if u is None:
-        return await ctx.respond("You aren't registered yet!")
+async def rank(ctx, name=None):
+    """Get your (or someone elses) rank"""
+    if name is None:
+        u = cur.execute("SELECT score, lastplayed FROM PLAYERS WHERE discordID = ?", (ctx.author.id,)).fetchone()
+        if u is None:
+            return await ctx.respond("You aren't registered yet!")
+    else:
+        u = cur.execute("SELECT score, lastplayed FROM PLAYERS WHERE playtak = ?", (name,)).fetchone()
+        if u is None:
+            return await ctx.respond(f"No player with the name {name} is registered!")
 
     s = getTrueScore(u[0], u[1])
     r = getRank(s)
-    out = f"Rank: {r}\nScore: {s}"
+    out = f"# {ctx.author.display_name}" if name is None else f"# {name}"
+    out += f"\n**Rank**: {r}\n**Score**: {s}"
     now = int(datetime.datetime.utcnow().timestamp())
     if now - u[1] > CONFIG["decayTime"]:
         out += " (inactive)"
