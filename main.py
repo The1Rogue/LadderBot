@@ -211,7 +211,7 @@ async def deregister(ctx):
 
 @bot.slash_command(guild_ids=KNOWN_GUILDS)
 async def rank(ctx, name=None):
-    """Get your (or someone elses) rank"""
+    """Get your (or someone else's) rank"""
     if name is None:
         u = cur.execute("SELECT score, lastplayed FROM PLAYERS WHERE discordID = ?", (ctx.author.id,)).fetchone()
         if u is None:
@@ -224,7 +224,7 @@ async def rank(ctx, name=None):
     s = getTrueScore(u[0], u[1])
     r = getRank(s)
     out = f"# {ctx.author.display_name}" if name is None else f"# {name}"
-    out += f"\n**Rank**: {r}\n**Score**: {s}"
+    out += f"\n**Rank**: :{RANKS[r]['icon']}:{r}\n**Score**: {s}"
     now = int(datetime.datetime.utcnow().timestamp())
     if now - u[1] > CONFIG["decayTime"]:
         out += " (inactive)"
@@ -263,7 +263,7 @@ async def recent(ctx, n: int = 5):
     out = "# Recent games:\n"
     for i in r:
         out += f" - {i[2]} vs. {i[3]} ({i[4]})"
-        out += f"[ptn.ninja](https://playtak.com/games/{i[0]}/ninjaviewer)\n" if i[0] != 0 else "\n"
+        out += f" [[ptn.ninja](https://playtak.com/games/{i[0]}/ninjaviewer)]\n" if i[0] != 0 else "\n"
     await ctx.respond(out)
 
 loadConfig()
