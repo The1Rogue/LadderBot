@@ -2,13 +2,6 @@
   "defaultScore": 1,
   "decayTime": 604800,
   "decayValue": 0.25,
-  "Ranks": {
-    "0": ["Bronze", 2, 0.5],
-    "4": ["Silver", 2, 1],
-    "7": ["Gold", 1, 1],
-    "10": ["Platinum", 1, -2],
-    "13": ["Diamond", 0.5, 2]
-  },
   "gameSettings": {
     "size": 6,
     "komi": 4,

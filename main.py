@@ -11,66 +11,92 @@ import sqlite3
 con = sqlite3.connect('ladder.db')
 cur = con.cursor()
 
-KNOWN_GUILDS = [1201101141115674694]
+KNOWN_GUILDS = [1201101141115674694]#, 176389490762448897]
 bot = discord.Bot()
+
+CONFIG = {}
+RANKS = {}
+BOTTOM_RANK = None
 
 with open("token.txt") as file:
     token = file.read()
 
 def loadConfig():
-    global CONFIG
+    """Loads config and rank data"""
+    global CONFIG, RANKS, BOTTOM_RANK
     with open("config.json") as f:
         CONFIG = json.load(f)
 
-    r = CONFIG["Ranks"]
-    CONFIG["Ranks"] = {int(i): r[i] for i in r}
+    with open("ranks.json") as f:
+        RANKS = json.load(f)
+
+    BOTTOM_RANK = ""
+    s = 999
+    for i in RANKS:
+        if RANKS[i]["minScore"] < s:
+            s = RANKS[i]["minScore"]
+            BOTTOM_RANK = i
+
 def saveConfig():
+    """Saves config and rank data"""
     with open("config.json", "w") as f:
         json.dump(CONFIG, f)
 
-def gameValid(game) -> bool:
+    with open("ranks.json", "w") as f:
+        json.dump(RANKS, f)
+
+def gameValid(game: dict) -> bool:
+    """Checks if a game's settings are correct"""
     for i in CONFIG["gameSettings"]:
         if game[i] != CONFIG["gameSettings"][i]:
             return False
     return True
 
-def getTrueScore(score, lastplayed):
+def getTrueScore(score: float, lastplayed: int) -> float:
+    """Get the score with decay deducted"""
     if lastplayed == 0:
         return score
     inactive = int(datetime.datetime.utcnow().timestamp()) - lastplayed
     days = inactive // CONFIG["decayTime"]
-    return score - days * CONFIG["decayValue"]
+    return max(score - days * CONFIG["decayValue"], 0)
 
-def getRank(score):
-    r = 0
-    for i in CONFIG["Ranks"]:
-        if r < int(i) < score:
-            r = int(i)
-    return CONFIG["Ranks"][r]
+def getRank(score: float) -> str:
+    """Get the rank a score belongs into"""
+    global BOTTOM_RANK
+    s = -1
+    r = None
+    for i in RANKS:
+        if s < RANKS[i]["minScore"] < score:
+            s = RANKS[i]["minScore"]
+            r = i
+    return r if r is not None else BOTTOM_RANK
 
-def win(player):
+def win(player: str):
+    """Update player data with a win"""
     u = cur.execute("SELECT score, lastplayed FROM PLAYERS WHERE playtak = ?", (player,)).fetchone()
     s = getTrueScore(u[0], u[1])
     r = getRank(s)
 
     cur.execute("UPDATE PLAYERS SET score = ?, lastplayed = ? WHERE playtak = ?",
-                (s + r[1], int(datetime.datetime.utcnow().timestamp()), player))
+                (s + RANKS[r]["win"], int(datetime.datetime.utcnow().timestamp()), player))
     con.commit()
 
-def lose(player):
+def lose(player: str):
+    """Update player data with a loss"""
     u = cur.execute("SELECT score, lastplayed FROM PLAYERS WHERE playtak = ?", (player,)).fetchone()
     s = getTrueScore(u[0], u[1])
     r = getRank(s)
 
     cur.execute("UPDATE PLAYERS SET score = ?, lastplayed = ? WHERE playtak = ?",
-                (max(s - r[2], 0), int(datetime.datetime.utcnow().timestamp()), player))
+                (max(s - RANKS[r]["loss"], 0), int(datetime.datetime.utcnow().timestamp()), player))
     con.commit()
 
-def draw(player):
+def draw(player: str):
+    """update player data with a draw"""
     pass
 
 @bot.slash_command(guild_ids=KNOWN_GUILDS)
-async def manual(ctx, player_white, player_black, result, game_id = 0):
+async def manual(ctx, player_white: str, player_black: str, result: str, game_id: int = 0):
     """Report a game manually for the ladder"""
     await ctx.defer()
     r = cur.execute("SELECT discordID FROM PLAYERS WHERE playtak = ?", (player_white,)).fetchone()
@@ -192,7 +218,7 @@ async def rank(ctx):
 
     s = getTrueScore(u[0], u[1])
     r = getRank(s)
-    out = f"Rank: {r[0]}\nScore: {s}"
+    out = f"Rank: {r}\nScore: {s}"
     now = int(datetime.datetime.utcnow().timestamp())
     if now - u[1] > CONFIG["decayTime"]:
         out += " (inactive)"
@@ -204,25 +230,27 @@ async def standings(ctx):
     await ctx.defer()
 
     players = cur.execute("SELECT playtak, score, lastplayed FROM PLAYERS").fetchall()
-    r = {CONFIG["Ranks"][i][0]: [] for i in CONFIG["Ranks"]}
+    ranking = {i: [] for i in RANKS}
     inactive = []
     now = int(datetime.datetime.utcnow().timestamp())
     for player in players:
         s = getTrueScore(player[1], player[2])
-        r[getRank(s)[0]].append(player[0])
+        r = getRank(s)
+        ranking[r].append(player[0])
         if now - player[2] > CONFIG["decayTime"]:
             inactive.append(player[0])
     out = "# CURRENT STANDINGS\n"
-    for i in r:
-        out += f"- **{i}**: {', '.join(r[i])}\n"
+    for i in ranking:
+        if len(ranking[i]) > 0:
+            out += f"- :{RANKS[i]['icon']}: **{i}**: {', '.join(ranking[i])}\n"
 
-    out += "\n"
-    out += f"**Inactive**: {', '.join(inactive)}"
+    if len(inactive) > 0:
+        out += f"\n**Inactive**: {', '.join(inactive)}"
 
     await ctx.respond(out)
 
 @bot.slash_command(guild_ids=KNOWN_GUILDS)
-async def recent(ctx, n=5):
+async def recent(ctx, n: int = 5):
     """Get recently played games"""
     await ctx.defer()
     r = cur.execute("SELECT * FROM GAMES ORDER BY date DESC LIMIT ?", (n,)).fetchall()

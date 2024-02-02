@@ -1,0 +1,32 @@
+{
+  "Bronze":{
+    "minScore": 0,
+    "win": 2,
+    "loss": 0.5,
+    "icon": "key"
+  },
+    "Silver":{
+    "minScore": 3,
+    "win": 2,
+    "loss": 1,
+    "icon": "fork_and_knife"
+  },
+  "Gold":{
+    "minScore": 6,
+    "win": 1,
+    "loss": 1,
+    "icon": "coin"
+  },
+  "Platinum":{
+    "minScore": 9,
+    "win": 1,
+    "loss": 2,
+    "icon": "rock"
+  },
+  "Diamond":{
+    "minScore": 12,
+    "win": 0.5,
+    "loss": 2,
+    "icon": "gem"
+  }
+}
