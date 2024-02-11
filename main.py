@@ -186,8 +186,8 @@ async def report(ctx, game_id: int):
             lose(pb, time)
 
         case "0-R" | "0-F" | "0-1":
-            lose(pb, time)
-            win(pw, time)
+            lose(pw, time)
+            win(pb, time)
 
         case "1/2-1/2":
             draw(pw, time)
