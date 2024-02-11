@@ -1,6 +1,5 @@
 
-
-import asyncio
+import sys
 import json
 import datetime
 
@@ -12,7 +11,6 @@ con = sqlite3.connect('ladder.db')
 cur = con.cursor()
 
 KNOWN_GUILDS = [1201101141115674694]#, 176389490762448897]
-bot = discord.Bot()
 
 CONFIG = {}
 RANKS = {}
@@ -20,6 +18,17 @@ BOTTOM_RANK = None
 
 with open("token.txt") as file:
     token = file.read()
+
+def realPrint(p):
+    print(p)
+    sys.stdout.flush()
+
+class LadderBot(discord.Bot):
+    async def on_application_command_error(self, ctx, e):
+        realPrint(f"errored on {ctx.command.qualified_name} with {type(e)}\n")
+        realPrint(f"{e}")
+
+bot = LadderBot()
 
 def loadConfig():
     """Loads config and rank data"""
@@ -71,27 +80,27 @@ def getRank(score: float) -> str:
             r = i
     return r if r is not None else BOTTOM_RANK
 
-def win(player: str):
+def win(player: str, t: int):
     """Update player data with a win"""
     u = cur.execute("SELECT score, lastplayed FROM PLAYERS WHERE playtak = ?", (player,)).fetchone()
     s = getTrueScore(u[0], u[1])
     r = getRank(s)
 
     cur.execute("UPDATE PLAYERS SET score = ?, lastplayed = ? WHERE playtak = ?",
-                (s + RANKS[r]["win"], int(datetime.datetime.utcnow().timestamp()), player))
+                (s + RANKS[r]["win"], t, player))
     con.commit()
 
-def lose(player: str):
+def lose(player: str, t: int):
     """Update player data with a loss"""
     u = cur.execute("SELECT score, lastplayed FROM PLAYERS WHERE playtak = ?", (player,)).fetchone()
     s = getTrueScore(u[0], u[1])
     r = getRank(s)
 
     cur.execute("UPDATE PLAYERS SET score = ?, lastplayed = ? WHERE playtak = ?",
-                (max(s - RANKS[r]["loss"], 0), int(datetime.datetime.utcnow().timestamp()), player))
+                (max(s - RANKS[r]["loss"], 0), t, player))
     con.commit()
 
-def draw(player: str):
+def draw(player: str, t: int):
     """update player data with a draw"""
     pass
 
@@ -108,18 +117,20 @@ async def manual(ctx, player_white: str, player_black: str, result: str, game_id
     if r is None:
         return await ctx.respond(f"Player {player_black} is not yet registered in the ladder")
 
+    time = int(datetime.datetime.utcnow().timestamp())
+
     match result:
         case "R-0" | "F-0" | "1-0":
-            win(player_white)
-            lose(player_black)
+            win(player_white, time)
+            lose(player_black, time)
 
         case "0-R" | "0-F" | "0-1":
-            lose(player_white)
-            win(player_black)
+            lose(player_white, time)
+            win(player_black, time)
 
         case "1/2-1/2":
-            draw(player_white)
-            draw(player_black)
+            draw(player_white, time)
+            draw(player_black, time)
 
         case result:
             return await ctx.respond(f"{result} is not a valid result")
@@ -131,7 +142,7 @@ async def manual(ctx, player_white: str, player_black: str, result: str, game_id
             return await ctx.respond(f"A game with id {game_id} has already been reported! (please use id 0 for over the board games)")
 
     cur.execute("INSERT INTO GAMES VALUES(?,?,?,?,?)",
-                (game_id, int(datetime.datetime.utcnow().timestamp()), player_white, player_black, result))
+                (game_id, time, player_white, player_black, result))
     con.commit()
     return await ctx.respond(f"Successfully registered game \"{player_white} - {player_black}\" as {result}!")
 
@@ -162,28 +173,30 @@ async def report(ctx, game_id: int):
     if not gameValid(game):
         return await ctx.respond(f"The game settings were not correct, please check if you reported the correct game\nif you would still like to submit it, please report manually")
 
-    match game["result"]:
-        case "R-0" | "F-0" | "1-0":
-            win(pw)
-            lose(pb)
-
-        case "0-R" | "0-F" | "0-1":
-            lose(pb)
-            win(pw)
-
-        case "1/2-1/2":
-            draw(pw)
-            draw(pb)
-
-        case result:
-            return await ctx.respond(f"{result} is an invalid game result, something weird is going on here.....")
-
     #verify a game with id does not already exist
     r = cur.execute("SELECT id FROM GAMES WHERE id = ?", (game_id,))
     if r.fetchone() is not None:
         return await ctx.respond(f"A game with id {game_id} has already been reported!")
 
-    cur.execute("INSERT INTO GAMES VALUES(?,?,?,?,?)", (game_id, game["date"], pw, pb, game["result"]))
+    time = game["date"] // 1000 #remove millis
+
+    match game["result"]:
+        case "R-0" | "F-0" | "1-0":
+            win(pw, time)
+            lose(pb, time)
+
+        case "0-R" | "0-F" | "0-1":
+            lose(pb, time)
+            win(pw, time)
+
+        case "1/2-1/2":
+            draw(pw, time)
+            draw(pb, time)
+
+        case result:
+            return await ctx.respond(f"{result} is an invalid game result, something weird is going on here.....")
+
+    cur.execute("INSERT INTO GAMES VALUES(?,?,?,?,?)", (game_id, time, pw, pb, game["result"]))
     con.commit()
     return await ctx.respond(f"Successfully registered game \"{pw} - {pb}\" as {game['result']}!")
 
@@ -266,5 +279,6 @@ async def recent(ctx, n: int = 5):
         out += f" [[ptn.ninja](https://playtak.com/games/{i[0]}/ninjaviewer)]\n" if i[0] != 0 else "\n"
     await ctx.respond(out)
 
+
 loadConfig()
-asyncio.run(bot.start(token))
+bot.run(token)
